@@ -140,7 +140,7 @@ PROMPT_EOF
     continue
   fi
 
-  git commit -m "fix: address CodeRabbit issue #$ISSUE_NUM
+  HUSKY=0 git commit -m "fix: address CodeRabbit issue #$ISSUE_NUM
 
 $ISSUE_TITLE"
 
