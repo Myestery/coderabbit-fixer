@@ -49,7 +49,7 @@ cd "$REPO_DIR"
 
 # Update main
 git checkout main 2>/dev/null || git checkout master
-git pull --ff-only
+git pull origin main --ff-only
 log "Repo updated to latest main"
 
 # Fetch open issues by coderabbitai bot
@@ -81,7 +81,7 @@ echo "$ISSUES_JSON" | jq -c '.[]' | while read -r issue; do
 
   # Reset to main
   git checkout main 2>/dev/null || git checkout master
-  git pull --ff-only
+  git pull origin main --ff-only
 
   # Create feature branch
   BRANCH="fix/coderabbit-issue-${ISSUE_NUM}"
