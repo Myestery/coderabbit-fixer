@@ -93,7 +93,9 @@ echo "$ISSUES_JSON" | jq -c '.[]' | while read -r issue; do
   # Run Claude to fix the issue
   log "Invoking Claude for issue #$ISSUE_NUM..."
 
-  CLAUDE_PROMPT="Fix the following GitHub issue (#$ISSUE_NUM):
+  PROMPT_FILE=$(mktemp)
+  cat > "$PROMPT_FILE" <<PROMPT_EOF
+Fix the following GitHub issue (#$ISSUE_NUM):
 
 Title: $ISSUE_TITLE
 
@@ -103,10 +105,12 @@ Instructions:
 - Make minimal changes to fix the issue
 - Run pnpm lint:fix and pnpm typecheck after making changes
 - Do not modify unrelated code
-- Follow existing code conventions in AGENTS.md"
+- Follow existing code conventions in AGENTS.md
+PROMPT_EOF
 
   CLAUDE_EXIT=0
-  timeout "$CLAUDE_TIMEOUT" claude --dangerously-skip-permissions -p "$CLAUDE_PROMPT" >> "$LOG_FILE" 2>&1 || CLAUDE_EXIT=$?
+  timeout "$CLAUDE_TIMEOUT" cat "$PROMPT_FILE" | claude --dangerously-skip-permissions -p >> "$LOG_FILE" 2>&1 || CLAUDE_EXIT=$?
+  rm -f "$PROMPT_FILE"
 
   if [ "$CLAUDE_EXIT" -ne 0 ]; then
     log "Claude failed or timed out for issue #$ISSUE_NUM (exit code: $CLAUDE_EXIT). Will retry next cycle."
