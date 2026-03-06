@@ -153,7 +153,7 @@ $ISSUE_TITLE"
     --repo "$REPO" \
     --draft \
     --title "fix: address CodeRabbit issue #$ISSUE_NUM" \
-    --body "Automated fix for #$ISSUE_NUM
+    --body "Closes #$ISSUE_NUM
 
 $ISSUE_PREVIEW
 
