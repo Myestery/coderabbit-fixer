@@ -77,6 +77,31 @@ echo "$ISSUES_JSON" | jq -c '.[]' | while read -r issue; do
     continue
   fi
 
+  # Skip issues that already have an open linked PR
+  LINKED_PRS=$(gh api graphql -f query="
+  {
+    repository(owner: \"Comfy-Org\", name: \"ComfyUI_frontend\") {
+      issue(number: $ISSUE_NUM) {
+        timelineItems(itemTypes: [CONNECTED_EVENT, CROSS_REFERENCED_EVENT], first: 10) {
+          nodes {
+            __typename
+            ... on ConnectedEvent {
+              subject { ... on PullRequest { number state } }
+            }
+            ... on CrossReferencedEvent {
+              source { ... on PullRequest { number state } }
+            }
+          }
+        }
+      }
+    }
+  }" 2>/dev/null | jq '[.data.repository.issue.timelineItems.nodes[] | (.source // .subject) | select(.state == "OPEN")] | length')
+
+  if [ "$LINKED_PRS" -gt 0 ]; then
+    log "Issue #$ISSUE_NUM already has an open linked PR. Skipping."
+    continue
+  fi
+
   log "Processing issue #$ISSUE_NUM: $ISSUE_TITLE"
 
   # Reset to main
