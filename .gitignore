@@ -1,0 +1,4 @@
+repo/
+logs/
+.lock
+node_modules/
