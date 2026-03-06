@@ -53,7 +53,10 @@ git pull --ff-only
 log "Repo updated to latest main"
 
 # Fetch open issues by coderabbitai bot
-ISSUES_JSON=$(gh issue list --repo "$REPO" --author "app/coderabbitai" --state open --json number,title,body,labels --limit 50)
+# Note: --author filter for bot accounts may not work on all gh versions,
+# so we fetch all recent issues and filter with jq
+ALL_ISSUES=$(gh issue list --repo "$REPO" --state open --json number,title,body,labels,author --limit 100)
+ISSUES_JSON=$(echo "$ALL_ISSUES" | jq '[.[] | select(.author.login == "app/coderabbitai")]')
 ISSUE_COUNT=$(echo "$ISSUES_JSON" | jq length)
 log "Found $ISSUE_COUNT open issues by coderabbitai"
 
