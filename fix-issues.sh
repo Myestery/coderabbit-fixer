@@ -131,61 +131,49 @@ PROMPT_EOF
     continue
   fi
 
-  # Stage changes
-  git add -A
-  if git diff --cached --quiet; then
-    log "No staged changes for issue #$ISSUE_NUM. Will retry next cycle."
+  # Self-review, commit, push, and PR — all handled by Claude
+  log "Running self-review, commit, push, and PR creation for issue #$ISSUE_NUM..."
+  REVIEW_PROMPT_FILE=$(mktemp)
+  cat > "$REVIEW_PROMPT_FILE" <<REVIEW_EOF
+You just made changes to fix issue #$ISSUE_NUM. Now do the following steps in order:
+
+1. REVIEW: Run "coderabbit --prompt-only --type uncommitted" to review your changes.
+   Read the output and fix any issues it finds. Do not revert the original fix — only improve it.
+   After fixing, run pnpm lint:fix and pnpm typecheck again.
+
+2. COMMIT: Stage all changes with git add, then commit with message:
+   "fix: $ISSUE_TITLE (#$ISSUE_NUM)"
+   Let the pre-commit hooks run. If they fail, fix the issues and try committing again.
+
+3. PUSH: Push the branch to origin with: git push origin $BRANCH --force-with-lease
+
+4. CREATE PR: Create a draft PR using:
+   gh pr create --repo $REPO --draft --title "fix: $ISSUE_TITLE (#$ISSUE_NUM)" --body "Closes #$ISSUE_NUM
+
+$(echo "$ISSUE_BODY" | head -20)
+
+---
+Automated by coderabbit-fixer"
+
+Print the PR URL at the end.
+REVIEW_EOF
+
+  REVIEW_EXIT=0
+  CLAUDE_ERR=$(mktemp)
+  timeout "$CLAUDE_TIMEOUT" cat "$REVIEW_PROMPT_FILE" | claude --dangerously-skip-permissions -p >> "$LOG_FILE" 2>"$CLAUDE_ERR" || REVIEW_EXIT=$?
+  rm -f "$REVIEW_PROMPT_FILE"
+
+  if [ "$REVIEW_EXIT" -ne 0 ]; then
+    log "Review/commit/push failed for issue #$ISSUE_NUM (exit code: $REVIEW_EXIT)."
+    log "Claude stderr: $(cat "$CLAUDE_ERR")"
+    rm -f "$CLAUDE_ERR"
     git checkout main 2>/dev/null || git checkout master
     git branch -D "$BRANCH" 2>/dev/null || true
     continue
   fi
+  rm -f "$CLAUDE_ERR"
 
-  # Self-review: run .agents/checks via Claude
-  log "Running self-review for issue #$ISSUE_NUM..."
-  REVIEW_PROMPT_FILE=$(mktemp)
-  cat > "$REVIEW_PROMPT_FILE" <<REVIEW_EOF
-Review the changes you just made for issue #$ISSUE_NUM using the review checks in .agents/checks/.
-
-Run each relevant check from .agents/checks/ against the current changes.
-If any check reveals issues, fix them before finishing.
-After fixing, run pnpm lint:fix and pnpm typecheck again.
-Do not revert the original fix — only improve it.
-REVIEW_EOF
-
-  REVIEW_EXIT=0
-  timeout "$CLAUDE_TIMEOUT" cat "$REVIEW_PROMPT_FILE" | claude --dangerously-skip-permissions -p >> "$LOG_FILE" 2>&1 || REVIEW_EXIT=$?
-  rm -f "$REVIEW_PROMPT_FILE"
-
-  if [ "$REVIEW_EXIT" -ne 0 ]; then
-    log "Self-review failed for issue #$ISSUE_NUM (exit code: $REVIEW_EXIT). Proceeding with original changes."
-  fi
-
-  # Re-stage after review fixes
-  git add -A
-
-  HUSKY=0 git commit -m "fix: $ISSUE_TITLE (#$ISSUE_NUM)"
-
-  # Push branch
-  git push origin "$BRANCH" --force-with-lease
-
-  # Create draft PR
-  ISSUE_PREVIEW=$(echo "$ISSUE_BODY" | head -20)
-  PR_URL=$(gh pr create \
-    --repo "$REPO" \
-    --draft \
-    --title "fix: $ISSUE_TITLE (#$ISSUE_NUM)" \
-    --body "Closes #$ISSUE_NUM
-
-$ISSUE_PREVIEW
-
----
-Automated by coderabbit-fixer" 2>&1) || {
-    log "Failed to create PR for issue #$ISSUE_NUM: $PR_URL"
-    git checkout main 2>/dev/null || git checkout master
-    continue
-  }
-
-  log "Created draft PR: $PR_URL"
+  log "Completed issue #$ISSUE_NUM"
 
   # Mark issue as processed
   echo "$ISSUE_NUM" >> "$STATE_FILE"
