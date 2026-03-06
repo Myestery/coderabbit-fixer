@@ -152,7 +152,7 @@ $ISSUE_TITLE"
   PR_URL=$(gh pr create \
     --repo "$REPO" \
     --draft \
-    --title "fix: address CodeRabbit issue #$ISSUE_NUM" \
+    --title "fix: $ISSUE_TITLE (#$ISSUE_NUM)" \
     --body "Closes #$ISSUE_NUM
 
 $ISSUE_PREVIEW
