@@ -147,13 +147,14 @@ You just made changes to fix issue #$ISSUE_NUM. Now do the following steps in or
 
 3. PUSH: Push the branch to origin with: git push origin $BRANCH --force-with-lease
 
-4. CREATE PR: Create a draft PR using:
-   gh pr create --repo $REPO --draft --title "fix: $ISSUE_TITLE (#$ISSUE_NUM)" --body "Closes #$ISSUE_NUM
-
-$(echo "$ISSUE_BODY" | head -20)
-
----
-Automated by coderabbit-fixer"
+4. CREATE PR: Create a draft PR with gh pr create --repo $REPO --draft
+   - Title: "fix: $ISSUE_TITLE (#$ISSUE_NUM)"
+   - Body: Write a clear PR description that includes:
+     a. "Closes #$ISSUE_NUM" on the first line
+     b. A "## Summary" section explaining what the issue was and what you changed to fix it
+     c. A "## Changes" section with a bullet list of the specific files/functions modified and why
+     d. End with "---\nAutomated by coderabbit-fixer"
+   - Use a heredoc to pass the body to gh pr create
 
 Print the PR URL at the end.
 REVIEW_EOF
