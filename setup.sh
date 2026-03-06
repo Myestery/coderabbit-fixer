@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="Comfy-Org/ComfyUI_frontend"
-WORK_DIR="$HOME/works/comfy-ui/coderabbit-fixer"
+WORK_DIR="/var/www/coderabbit-fixer"
 REPO_DIR="$WORK_DIR/repo"
 STATE_FILE="$WORK_DIR/processed_issues.txt"
 LOG_DIR="$WORK_DIR/logs"
@@ -31,7 +31,7 @@ fi
 echo "  claude CLI: OK"
 
 if ! command -v jq &>/dev/null; then
-  echo "ERROR: jq not found. Install it: brew install jq"
+  echo "ERROR: jq not found. Install it: sudo apt install jq"
   exit 1
 fi
 echo "  jq: OK"
@@ -62,18 +62,56 @@ if [ -f "$CLAUDE_MD" ]; then
   echo "  CLAUDE.md copied to repo: OK"
 fi
 
-# Show cron setup instructions
-CRON_ENTRY="*/30 * * * * $SCRIPT >> $LOG_DIR/cron.log 2>&1"
+# Install systemd service and timer
+echo "Installing systemd service and timer..."
+
+SERVICE_FILE="/etc/systemd/system/coderabbit-fixer.service"
+TIMER_FILE="/etc/systemd/system/coderabbit-fixer.timer"
+
+sudo tee "$SERVICE_FILE" > /dev/null << EOF
+[Unit]
+Description=CodeRabbit Issue Auto-Fixer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$SCRIPT
+WorkingDirectory=$WORK_DIR
+User=$(whoami)
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/$(whoami)/.local/bin:/home/$(whoami)/.npm-global/bin
+Environment=HOME=/home/$(whoami)
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee "$TIMER_FILE" > /dev/null << EOF
+[Unit]
+Description=Run CodeRabbit Issue Auto-Fixer every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable coderabbit-fixer.timer
+sudo systemctl start coderabbit-fixer.timer
+
+echo "  systemd timer: OK"
+
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "To run manually:"
-echo "  $SCRIPT"
-echo ""
-echo "To set up cron (every 30 minutes), run:"
-echo "  crontab -e"
-echo "  Then add this line:"
-echo "  $CRON_ENTRY"
-echo ""
-echo "Or run this to add it automatically:"
-echo "  (crontab -l 2>/dev/null; echo '$CRON_ENTRY') | crontab -"
+echo "Manage with:"
+echo "  sudo systemctl status coderabbit-fixer.timer   # timer status"
+echo "  sudo systemctl list-timers coderabbit-fixer*    # next run time"
+echo "  sudo systemctl start coderabbit-fixer.service   # run now"
+echo "  journalctl -u coderabbit-fixer.service -f       # follow logs"
+echo "  sudo systemctl stop coderabbit-fixer.timer      # stop scheduling"
+echo "  sudo systemctl disable coderabbit-fixer.timer   # disable on boot"

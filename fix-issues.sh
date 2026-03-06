@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="Comfy-Org/ComfyUI_frontend"
-WORK_DIR="$HOME/works/comfy-ui/coderabbit-fixer"
+WORK_DIR="/var/www/coderabbit-fixer"
 REPO_DIR="$WORK_DIR/repo"
 STATE_FILE="$WORK_DIR/processed_issues.txt"
 LOG_DIR="$WORK_DIR/logs"
