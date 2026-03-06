@@ -109,15 +109,19 @@ Instructions:
 PROMPT_EOF
 
   CLAUDE_EXIT=0
-  timeout "$CLAUDE_TIMEOUT" cat "$PROMPT_FILE" | claude --dangerously-skip-permissions -p >> "$LOG_FILE" 2>&1 || CLAUDE_EXIT=$?
+  CLAUDE_ERR=$(mktemp)
+  timeout "$CLAUDE_TIMEOUT" cat "$PROMPT_FILE" | claude --dangerously-skip-permissions -p >> "$LOG_FILE" 2>"$CLAUDE_ERR" || CLAUDE_EXIT=$?
   rm -f "$PROMPT_FILE"
 
   if [ "$CLAUDE_EXIT" -ne 0 ]; then
     log "Claude failed or timed out for issue #$ISSUE_NUM (exit code: $CLAUDE_EXIT). Will retry next cycle."
+    log "Claude stderr: $(cat "$CLAUDE_ERR")"
+    rm -f "$CLAUDE_ERR"
     git checkout main 2>/dev/null || git checkout master
     git branch -D "$BRANCH" 2>/dev/null || true
     continue
   fi
+  rm -f "$CLAUDE_ERR"
 
   # Check if Claude made any changes
   if git diff --quiet && git diff --cached --quiet; then
