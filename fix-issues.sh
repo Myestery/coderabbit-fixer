@@ -131,7 +131,7 @@ PROMPT_EOF
     continue
   fi
 
-  # Stage and commit changes
+  # Stage changes
   git add -A
   if git diff --cached --quiet; then
     log "No staged changes for issue #$ISSUE_NUM. Will retry next cycle."
@@ -140,9 +140,30 @@ PROMPT_EOF
     continue
   fi
 
-  HUSKY=0 git commit -m "fix: address CodeRabbit issue #$ISSUE_NUM
+  # Self-review: run .agents/checks via Claude
+  log "Running self-review for issue #$ISSUE_NUM..."
+  REVIEW_PROMPT_FILE=$(mktemp)
+  cat > "$REVIEW_PROMPT_FILE" <<REVIEW_EOF
+Review the changes you just made for issue #$ISSUE_NUM using the review checks in .agents/checks/.
 
-$ISSUE_TITLE"
+Run each relevant check from .agents/checks/ against the current changes.
+If any check reveals issues, fix them before finishing.
+After fixing, run pnpm lint:fix and pnpm typecheck again.
+Do not revert the original fix — only improve it.
+REVIEW_EOF
+
+  REVIEW_EXIT=0
+  timeout "$CLAUDE_TIMEOUT" cat "$REVIEW_PROMPT_FILE" | claude --dangerously-skip-permissions -p >> "$LOG_FILE" 2>&1 || REVIEW_EXIT=$?
+  rm -f "$REVIEW_PROMPT_FILE"
+
+  if [ "$REVIEW_EXIT" -ne 0 ]; then
+    log "Self-review failed for issue #$ISSUE_NUM (exit code: $REVIEW_EXIT). Proceeding with original changes."
+  fi
+
+  # Re-stage after review fixes
+  git add -A
+
+  HUSKY=0 git commit -m "fix: $ISSUE_TITLE (#$ISSUE_NUM)"
 
   # Push branch
   git push origin "$BRANCH" --force-with-lease
